@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "versions": [
+    {
+      "version": "0.9.0",
+      "channel": "stable",
+      "supportedAmongUsVersions": [
+        "2026.6.5"
+      ],
+      "publishedAt": null,
+      "releaseNotes": "",
+      "downloadUrl": "",
+      "sha256": "",
+      "requiredReactorVersion": "2.5.1-ci.384"
+    }
+  ]
+}
