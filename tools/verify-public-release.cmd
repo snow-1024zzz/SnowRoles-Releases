@@ -17,96 +17,80 @@ if errorlevel 1 (set "FAIL_REASON=Could not hash Local ZIP."& set "FAIL_CODE=22"
 curl.exe -L --fail --silent --show-error -H "Accept: application/vnd.github+json" -o "%API_JSON%" "https://api.github.com/repos/snow-1024zzz/SnowRoles-Releases/releases/tags/%TAG%"
 if errorlevel 1 (set "FAIL_REASON=Public Release API request failed."& set "FAIL_CODE=23"& goto :Fail)
 
-set "TAG_MATCH=0"
-set "PRERELEASE_MATCH=0"
 set "ASSET_COUNT=0"
-set "ASSET_FOUND=0"
-set "ASSET_STATE_MATCH=0"
+set "ASSET_NAME_COUNT=0"
 set "TAG_NAME_COUNT=0"
 set "PRERELEASE_COUNT=0"
 set "EXPECTED_URL_COUNT=0"
 set "STATE_COUNT=0"
 set "SIZE_COUNT=0"
 set "DIGEST_COUNT=0"
+set "API_TAG="
+set "API_PRERELEASE="
+set "API_ASSET_NAME="
+set "API_ASSET_URL="
+set "API_ASSET_STATE="
 set "API_SIZE="
 set "API_DIGEST="
-for /f "usebackq delims=" %%L in ("%API_JSON%") do (
-  set "LINE=%%L"
-  echo(!LINE!^| findstr /l /c:"tag_name" >nul && (
-    set /a TAG_NAME_COUNT+=1
-    set "API_TAG=!LINE:*:=!"
-    set "API_TAG=!API_TAG:"=!"
-    set "API_TAG=!API_TAG:,=!"
-    set "API_TAG=!API_TAG: =!"
-    if /i "!API_TAG!"=="%TAG%" set "TAG_MATCH=1"
-  )
-  echo(!LINE!^| findstr /l /c:"prerelease" >nul && (
-    set /a PRERELEASE_COUNT+=1
-    echo(!LINE!^| findstr /l /c:"true" >nul && set "PRERELEASE_MATCH=1"
-  )
-  echo(!LINE!^| findstr /l /c:"browser_download_url" >nul && set /a ASSET_COUNT+=1
-  echo(!LINE!^| findstr /l /c:"https://github.com/snow-1024zzz/SnowRoles-Releases/releases/download/%TAG%/%ZIP_NAME%" >nul && set /a EXPECTED_URL_COUNT+=1
-  echo(!LINE!^| findstr /l /c:"state" >nul && (
-    set /a STATE_COUNT+=1
-    echo(!LINE!^| findstr /l /c:"uploaded" >nul && set "ASSET_STATE_MATCH=1"
-  )
-  echo(!LINE!^| findstr /l /c:"size" >nul && (
-    set /a SIZE_COUNT+=1
-    set "API_SIZE=!LINE:*:=!"
-    set "API_SIZE=!API_SIZE:,=!"
-    set "API_SIZE=!API_SIZE: =!"
-  )
-  echo(!LINE!^| findstr /l /c:"digest" >nul && (
-    set /a DIGEST_COUNT+=1
-    set "API_DIGEST=!LINE:*sha256:=!"
-    set "API_DIGEST=!API_DIGEST:"=!"
-    set "API_DIGEST=!API_DIGEST:,=!"
-    set "API_DIGEST=!API_DIGEST: =!"
-  )
-  if "!ASSET_FOUND!"=="0" (
-    echo(!LINE!^| findstr /l /c:"%ZIP_NAME%" >nul && (
-      set "API_ASSET_NAME=!LINE:*:=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME:"=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME:,=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME: =!"
-      if /i "!API_ASSET_NAME!"=="%ZIP_NAME%" set "ASSET_FOUND=1"
+for /f "usebackq delims=" %%A in ("%API_JSON%") do (
+  set "JSON_LINE=%%A"
+  for /f "tokens=1,* delims=:" %%K in ("!JSON_LINE!") do (
+    set "JSON_KEY=%%K"
+    set "JSON_VALUE=%%L"
+    set "JSON_KEY=!JSON_KEY:"=!"
+    set "JSON_VALUE=!JSON_VALUE:"=!"
+    set "JSON_VALUE=!JSON_VALUE:,=!"
+    set "JSON_VALUE=!JSON_VALUE: =!"
+    if "!JSON_KEY!"=="  tag_name" (
+      set /a TAG_NAME_COUNT+=1
+      set "API_TAG=!JSON_VALUE!"
     )
-  ) else (
-    echo(!LINE!^| findstr /l /c:"state" >nul && echo(!LINE!^| findstr /l /c:"uploaded" >nul && set "ASSET_STATE_MATCH=1"
-    if not defined API_SIZE (
-      echo(!LINE!^| findstr /l /c:"size" >nul && (
-        set "API_SIZE=!LINE:*:=!"
-        set "API_SIZE=!API_SIZE:,=!"
-        set "API_SIZE=!API_SIZE: =!"
-      )
+    if "!JSON_KEY!"=="  prerelease" (
+      set /a PRERELEASE_COUNT+=1
+      set "API_PRERELEASE=!JSON_VALUE!"
     )
-    if not defined API_DIGEST (
-      echo(!LINE!^| findstr /l /c:"digest" >nul && (
-        set "API_DIGEST=!LINE:*sha256:=!"
-        set "API_DIGEST=!API_DIGEST:"=!"
-        set "API_DIGEST=!API_DIGEST:,=!"
-        set "API_DIGEST=!API_DIGEST: =!"
-      )
+    if "!JSON_KEY!"=="      url" set /a ASSET_COUNT+=1
+    if "!JSON_KEY!"=="      name" (
+      set /a ASSET_NAME_COUNT+=1
+      set "API_ASSET_NAME=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      browser_download_url" (
+      set /a EXPECTED_URL_COUNT+=1
+      set "API_ASSET_URL=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      state" (
+      set /a STATE_COUNT+=1
+      set "API_ASSET_STATE=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      size" (
+      set /a SIZE_COUNT+=1
+      set "API_SIZE=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      digest" (
+      set /a DIGEST_COUNT+=1
+      set "API_DIGEST=!JSON_VALUE:sha256:=!"
     )
   )
 )
 if not "%TAG_NAME_COUNT%"=="1" (set "FAIL_REASON=tag_name is not unique."& set "FAIL_CODE=29"& goto :Fail)
-if not "%TAG_MATCH%"=="1" (set "FAIL_REASON=tag_name mismatch."& set "FAIL_CODE=30"& goto :Fail)
+if /i not "%API_TAG%"=="%TAG%" (set "FAIL_REASON=tag_name mismatch."& set "FAIL_CODE=30"& goto :Fail)
 if not "%PRERELEASE_COUNT%"=="1" (set "FAIL_REASON=prerelease field is not unique."& set "FAIL_CODE=31"& goto :Fail)
-if not "%PRERELEASE_MATCH%"=="1" (set "FAIL_REASON=Release is not marked prerelease."& set "FAIL_CODE=31"& goto :Fail)
+if /i not "%API_PRERELEASE%"=="true" (set "FAIL_REASON=Release is not marked prerelease."& set "FAIL_CODE=31"& goto :Fail)
 if not "%ASSET_COUNT%"=="1" (set "FAIL_REASON=Release must contain exactly one Asset."& set "FAIL_CODE=32"& goto :Fail)
-if not "%ASSET_FOUND%"=="1" (set "FAIL_REASON=Expected Asset filename was not found."& set "FAIL_CODE=33"& goto :Fail)
-if not "%EXPECTED_URL_COUNT%"=="1" (set "FAIL_REASON=Expected browser_download_url is not unique."& set "FAIL_CODE=34"& goto :Fail)
-if not "%STATE_COUNT%"=="1" (set "FAIL_REASON=Asset state is not unique."& set "FAIL_CODE=35"& goto :Fail)
-if not "%ASSET_STATE_MATCH%"=="1" (set "FAIL_REASON=Asset state is not uploaded."& set "FAIL_CODE=34"& goto :Fail)
-if not "%SIZE_COUNT%"=="1" (set "FAIL_REASON=Asset size is not unique."& set "FAIL_CODE=35"& goto :Fail)
-if not "%DIGEST_COUNT%"=="1" (set "FAIL_REASON=Asset digest is not unique."& set "FAIL_CODE=36"& goto :Fail)
-if not defined API_SIZE (set "FAIL_REASON=Asset size was not parsed."& set "FAIL_CODE=35"& goto :Fail)
-if not defined API_DIGEST (set "FAIL_REASON=Asset digest was not parsed."& set "FAIL_CODE=36"& goto :Fail)
+if not "%ASSET_NAME_COUNT%"=="1" (set "FAIL_REASON=Asset name is not unique."& set "FAIL_CODE=33"& goto :Fail)
+if /i not "%API_ASSET_NAME%"=="%ZIP_NAME%" (set "FAIL_REASON=Expected Asset filename was not found."& set "FAIL_CODE=34"& goto :Fail)
+if not "%EXPECTED_URL_COUNT%"=="1" (set "FAIL_REASON=Expected browser_download_url is not unique."& set "FAIL_CODE=35"& goto :Fail)
+if /i not "%API_ASSET_URL%"=="https://github.com/snow-1024zzz/SnowRoles-Releases/releases/download/%TAG%/%ZIP_NAME%" (set "FAIL_REASON=Asset browser_download_url mismatch."& set "FAIL_CODE=36"& goto :Fail)
+if not "%STATE_COUNT%"=="1" (set "FAIL_REASON=Asset state is not unique."& set "FAIL_CODE=37"& goto :Fail)
+if /i not "%API_ASSET_STATE%"=="uploaded" (set "FAIL_REASON=Asset state is not uploaded."& set "FAIL_CODE=38"& goto :Fail)
+if not "%SIZE_COUNT%"=="1" (set "FAIL_REASON=Asset size is not unique."& set "FAIL_CODE=39"& goto :Fail)
+if not "%DIGEST_COUNT%"=="1" (set "FAIL_REASON=Asset digest is not unique."& set "FAIL_CODE=40"& goto :Fail)
+if not defined API_SIZE (set "FAIL_REASON=Asset size was not parsed."& set "FAIL_CODE=41"& goto :Fail)
+if not defined API_DIGEST (set "FAIL_REASON=Asset digest was not parsed."& set "FAIL_CODE=42"& goto :Fail)
 call :ValidateHash "%API_DIGEST%"
-if errorlevel 1 (set "FAIL_REASON=Asset digest is invalid."& set "FAIL_CODE=37"& goto :Fail)
-if not "%API_SIZE%"=="%LOCAL_SIZE%" (set "FAIL_REASON=Asset size differs from Local ZIP."& set "FAIL_CODE=38"& goto :Fail)
-if /i not "%API_DIGEST%"=="%LOCAL_HASH%" (set "FAIL_REASON=Asset digest differs from Local ZIP."& set "FAIL_CODE=39"& goto :Fail)
+if errorlevel 1 (set "FAIL_REASON=Asset digest is invalid."& set "FAIL_CODE=43"& goto :Fail)
+if not "%API_SIZE%"=="%LOCAL_SIZE%" (set "FAIL_REASON=Asset size differs from Local ZIP."& set "FAIL_CODE=44"& goto :Fail)
+if /i not "%API_DIGEST%"=="%LOCAL_HASH%" (set "FAIL_REASON=Asset digest differs from Local ZIP."& set "FAIL_CODE=45"& goto :Fail)
 echo.
 echo PUBLIC RELEASE VERIFY = PASS
 echo TAG=%TAG%

@@ -72,67 +72,57 @@ set "STEP=previous Release metadata"
 curl.exe -L --fail --silent --show-error -H "Accept: application/vnd.github+json" -o "%API_JSON%" "https://api.github.com/repos/snow-1024zzz/SnowRoles-Releases/releases/tags/%PREVIOUS_TAG%"
 if errorlevel 1 (set "FAIL_REASON=Could not obtain previous Release metadata."& set "FAIL_CODE=60"& goto :Fail)
 set "ASSET_COUNT=0"
-set "ASSET_FOUND=0"
+set "ASSET_NAME_COUNT=0"
 set "TAG_NAME_COUNT=0"
 set "PRERELEASE_COUNT=0"
 set "EXPECTED_URL_COUNT=0"
+set "STATE_COUNT=0"
 set "SIZE_COUNT=0"
 set "DIGEST_COUNT=0"
+set "API_TAG="
+set "API_PRERELEASE="
+set "API_ASSET_NAME="
+set "API_ASSET_URL="
+set "API_ASSET_STATE="
 set "API_ASSET_SIZE="
 set "API_ASSET_DIGEST="
-for /f "usebackq delims=" %%L in ("%API_JSON%") do (
-  set "LINE=%%L"
-  echo(!LINE!^| findstr /l /c:"tag_name" >nul && (
-    set /a TAG_NAME_COUNT+=1
-    set "API_TAG=!LINE:*:=!"
-    set "API_TAG=!API_TAG:"=!"
-    set "API_TAG=!API_TAG:,=!"
-    set "API_TAG=!API_TAG: =!"
-  )
-  echo(!LINE!^| findstr /l /c:"prerelease" >nul && (
-    set /a PRERELEASE_COUNT+=1
-    set "API_PRERELEASE=!LINE:*:=!"
-    set "API_PRERELEASE=!API_PRERELEASE:,=!"
-    set "API_PRERELEASE=!API_PRERELEASE: =!"
-  )
-  echo(!LINE!^| findstr /l /c:"browser_download_url" >nul && set /a ASSET_COUNT+=1
-  echo(!LINE!^| findstr /l /c:"https://github.com/snow-1024zzz/SnowRoles-Releases/releases/download/%PREVIOUS_TAG%/%PREVIOUS_ZIP_NAME%" >nul && set /a EXPECTED_URL_COUNT+=1
-  echo(!LINE!^| findstr /l /c:"size" >nul && (
-    set /a SIZE_COUNT+=1
-    set "API_ASSET_SIZE=!LINE:*:=!"
-    set "API_ASSET_SIZE=!API_ASSET_SIZE:,=!"
-    set "API_ASSET_SIZE=!API_ASSET_SIZE: =!"
-  )
-  echo(!LINE!^| findstr /l /c:"digest" >nul && (
-    set /a DIGEST_COUNT+=1
-    set "API_ASSET_DIGEST=!LINE:*sha256:=!"
-    set "API_ASSET_DIGEST=!API_ASSET_DIGEST:"=!"
-    set "API_ASSET_DIGEST=!API_ASSET_DIGEST:,=!"
-    set "API_ASSET_DIGEST=!API_ASSET_DIGEST: =!"
-  )
-  if "!ASSET_FOUND!"=="0" (
-    echo(!LINE!^| findstr /l /c:"%PREVIOUS_ZIP_NAME%" >nul && (
-      set "API_ASSET_NAME=!LINE:*:=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME:"=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME:,=!"
-      set "API_ASSET_NAME=!API_ASSET_NAME: =!"
-      if /i "!API_ASSET_NAME!"=="%PREVIOUS_ZIP_NAME%" set "ASSET_FOUND=1"
+for /f "usebackq delims=" %%A in ("%API_JSON%") do (
+  set "JSON_LINE=%%A"
+  for /f "tokens=1,* delims=:" %%K in ("!JSON_LINE!") do (
+    set "JSON_KEY=%%K"
+    set "JSON_VALUE=%%L"
+    set "JSON_KEY=!JSON_KEY:"=!"
+    set "JSON_VALUE=!JSON_VALUE:"=!"
+    set "JSON_VALUE=!JSON_VALUE:,=!"
+    set "JSON_VALUE=!JSON_VALUE: =!"
+    if "!JSON_KEY!"=="  tag_name" (
+      set /a TAG_NAME_COUNT+=1
+      set "API_TAG=!JSON_VALUE!"
     )
-  ) else (
-    if not defined API_ASSET_SIZE (
-      echo(!LINE!^| findstr /l /c:"size" >nul && (
-        set "API_ASSET_SIZE=!LINE:*:=!"
-        set "API_ASSET_SIZE=!API_ASSET_SIZE:,=!"
-        set "API_ASSET_SIZE=!API_ASSET_SIZE: =!"
-      )
+    if "!JSON_KEY!"=="  prerelease" (
+      set /a PRERELEASE_COUNT+=1
+      set "API_PRERELEASE=!JSON_VALUE!"
     )
-    if not defined API_ASSET_DIGEST (
-      echo(!LINE!^| findstr /l /c:"digest" >nul && (
-        set "API_ASSET_DIGEST=!LINE:*sha256:=!"
-        set "API_ASSET_DIGEST=!API_ASSET_DIGEST:"=!"
-        set "API_ASSET_DIGEST=!API_ASSET_DIGEST:,=!"
-        set "API_ASSET_DIGEST=!API_ASSET_DIGEST: =!"
-      )
+    if "!JSON_KEY!"=="      url" set /a ASSET_COUNT+=1
+    if "!JSON_KEY!"=="      name" (
+      set /a ASSET_NAME_COUNT+=1
+      set "API_ASSET_NAME=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      browser_download_url" (
+      set /a EXPECTED_URL_COUNT+=1
+      set "API_ASSET_URL=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      state" (
+      set /a STATE_COUNT+=1
+      set "API_ASSET_STATE=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      size" (
+      set /a SIZE_COUNT+=1
+      set "API_ASSET_SIZE=!JSON_VALUE!"
+    )
+    if "!JSON_KEY!"=="      digest" (
+      set /a DIGEST_COUNT+=1
+      set "API_ASSET_DIGEST=!JSON_VALUE:sha256:=!"
     )
   )
 )
@@ -140,15 +130,19 @@ if not "%TAG_NAME_COUNT%"=="1" (set "FAIL_REASON=Previous Release tag_name is no
 if /i not "%API_TAG%"=="%PREVIOUS_TAG%" (set "FAIL_REASON=Previous Release tag_name mismatch."& set "FAIL_CODE=62"& goto :Fail)
 if not "%PRERELEASE_COUNT%"=="1" (set "FAIL_REASON=Previous Release prerelease field is not unique."& set "FAIL_CODE=63"& goto :Fail)
 if /i not "%API_PRERELEASE%"=="true" (set "FAIL_REASON=Previous Release is not a prerelease."& set "FAIL_CODE=64"& goto :Fail)
-if not "%ASSET_COUNT%"=="1" (set "FAIL_REASON=Previous Release must contain exactly one Asset."& set "FAIL_CODE=61"& goto :Fail)
-if not "%ASSET_FOUND%"=="1" (set "FAIL_REASON=Expected previous ZIP Asset was not found."& set "FAIL_CODE=62"& goto :Fail)
-if not "%EXPECTED_URL_COUNT%"=="1" (set "FAIL_REASON=Expected previous ZIP browser_download_url is not unique."& set "FAIL_CODE=63"& goto :Fail)
-if not "%SIZE_COUNT%"=="1" (set "FAIL_REASON=Previous Asset size is not unique."& set "FAIL_CODE=64"& goto :Fail)
-if not "%DIGEST_COUNT%"=="1" (set "FAIL_REASON=Previous Asset digest is not unique."& set "FAIL_CODE=65"& goto :Fail)
-if not defined API_ASSET_SIZE (set "FAIL_REASON=Previous Asset size was not parsed uniquely."& set "FAIL_CODE=63"& goto :Fail)
-if not defined API_ASSET_DIGEST (set "FAIL_REASON=Previous Asset digest was not parsed uniquely."& set "FAIL_CODE=64"& goto :Fail)
+if not "%ASSET_COUNT%"=="1" (set "FAIL_REASON=Previous Release must contain exactly one Asset."& set "FAIL_CODE=65"& goto :Fail)
+if not "%ASSET_NAME_COUNT%"=="1" (set "FAIL_REASON=Previous Asset name is not unique."& set "FAIL_CODE=66"& goto :Fail)
+if /i not "%API_ASSET_NAME%"=="%PREVIOUS_ZIP_NAME%" (set "FAIL_REASON=Expected previous ZIP Asset was not found."& set "FAIL_CODE=67"& goto :Fail)
+if not "%EXPECTED_URL_COUNT%"=="1" (set "FAIL_REASON=Previous Asset browser_download_url is not unique."& set "FAIL_CODE=68"& goto :Fail)
+if /i not "%API_ASSET_URL%"=="https://github.com/snow-1024zzz/SnowRoles-Releases/releases/download/%PREVIOUS_TAG%/%PREVIOUS_ZIP_NAME%" (set "FAIL_REASON=Previous Asset browser_download_url mismatch."& set "FAIL_CODE=69"& goto :Fail)
+if not "%STATE_COUNT%"=="1" (set "FAIL_REASON=Previous Asset state is not unique."& set "FAIL_CODE=70"& goto :Fail)
+if /i not "%API_ASSET_STATE%"=="uploaded" (set "FAIL_REASON=Previous Asset state is not uploaded."& set "FAIL_CODE=71"& goto :Fail)
+if not "%SIZE_COUNT%"=="1" (set "FAIL_REASON=Previous Asset size is not unique."& set "FAIL_CODE=72"& goto :Fail)
+if not "%DIGEST_COUNT%"=="1" (set "FAIL_REASON=Previous Asset digest is not unique."& set "FAIL_CODE=73"& goto :Fail)
+if not defined API_ASSET_SIZE (set "FAIL_REASON=Previous Asset size was not parsed."& set "FAIL_CODE=74"& goto :Fail)
+if not defined API_ASSET_DIGEST (set "FAIL_REASON=Previous Asset digest was not parsed."& set "FAIL_CODE=75"& goto :Fail)
 call :ValidateHash "%API_ASSET_DIGEST%"
-if errorlevel 1 (set "FAIL_REASON=Previous Asset digest is invalid."& set "FAIL_CODE=65"& goto :Fail)
+if errorlevel 1 (set "FAIL_REASON=Previous Asset digest is invalid."& set "FAIL_CODE=76"& goto :Fail)
 
 set "STEP=previous ZIP acquisition"
 if exist "%PREVIOUS_LOCAL%" (
